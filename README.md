@@ -1,4 +1,4 @@
-# LexAI: Intelligent Research Assistant
+# LexAI: Intelligent Legal Research Assistant
 
 LexAI is a powerful, browser-based research assistant designed to help users extract insights from PDF documents. By leveraging Google's Gemini API, LexAI allows you to upload multiple documents and engage in a natural, cited conversation across your sources.
 
