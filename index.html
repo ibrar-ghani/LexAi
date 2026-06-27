@@ -1,1 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LexAI - Research Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #1a1a2e;
+            --bg-panel: #16213e;
+            --bg-panel-hover: #1f2d50;
+            --accent: #e8c547;
+            --accent-hover: #f9d863;
+            --text-main: #e8e6e1;
+            --text-muted: #8a8a9a;
+            --border: rgba(255, 255, 255, 0.1);
+            --border-highlight: rgba(232, 197, 71, 0.3);
+            --success: #4ade80;
+            --error: #f87171;
+            --font-sans: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --transition: all 0.2s ease;
+        }
 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Typography & Utilities */
+        button { font-family: var(--font-sans); cursor: pointer; border: none; background: none; color: inherit; transition: var(--transition); }
+        input, textarea { font-family: var(--font-sans); outline: none; transition: var(--transition); }
+        .glass { background: rgba(22, 33, 62, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        
+        /* Layout */
+        #left-panel { width: 280px; background-color: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; z-index: 10; transition: transform 0.3s ease; }
+        #center-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+        #right-panel { width: 320px; background-color: var(--bg-panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; transition: transform 0.3s ease; }
+
+        /* --- Left Panel --- */
+        .panel-header { padding: 20px; border-bottom: 1px solid var(--border); position: relative; overflow: hidden; }
+        .animated-bg {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 0; opacity: 0.1;
+            background: linear-gradient(45deg, var(--accent), #9333ea, var(--accent));
+            background-size: 200% 200%; animation: gradientBG 10s ease infinite;
+        }
+        @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        
+        .logo-area { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; }
+        .logo-icon { font-size: 24px; }
+        .logo-text h1 { font-size: 1.2rem; font-weight: 700; color: white; }
+        .logo-text p { font-size: 0.75rem; color: var(--text-muted); }
+
+        .btn-primary {
+            display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px;
+            background-color: transparent; border: 1px solid var(--accent); color: var(--accent);
+            border-radius: 8px; font-weight: 600; margin-top: 20px; position: relative; z-index: 1;
+        }
+        .btn-primary:hover { background-color: rgba(232, 197, 71, 0.1); box-shadow: 0 0 15px rgba(232, 197, 71, 0.2); }
+
+        .sources-list { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        
+        .upload-zone {
+            border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center;
+            color: var(--text-muted); cursor: pointer; transition: var(--transition); display: none;
+        }
+        .upload-zone.dragover { border-color: var(--accent); background: rgba(232, 197, 71, 0.05); }
+        .upload-zone:hover { border-color: var(--text-muted); }
+        #file-input { display: none; }
+
+        .source-card {
+            background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px;
+            padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: var(--transition);
+        }
+        .source-card:hover { background: var(--bg-panel-hover); border-color: var(--border-highlight); }
+        .source-card.glow { box-shadow: 0 0 15px rgba(232, 197, 71, 0.3); border-color: var(--accent); }
+        .source-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .source-title { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; overflow: hidden; }
+        .source-title span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .source-stats { font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 10px; }
+        
+        .toggle-dot {
+            width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border);
+            cursor: pointer; transition: var(--transition); flex-shrink: 0;
+        }
+        .toggle-dot.active { background-color: var(--success); border-color: var(--success); box-shadow: 0 0 8px rgba(74, 222, 128, 0.5); }
+
+        .api-key-section { padding: 15px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2); }
+        .api-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 0.85rem; color: var(--text-muted); }
+        .api-status { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+        .api-status.has-key { background: var(--success); }
+        .api-content { display: none; margin-top: 10px; flex-direction: column; gap: 10px; }
+        .api-content.open { display: flex; }
+        .api-input-group { display: flex; align-items: center; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; }
+        .api-input-group input { flex: 1; background: transparent; border: none; color: var(--text-main); padding: 8px 0; font-family: var(--font-mono); font-size: 0.8rem; }
+        .btn-text { font-size: 0.8rem; color: var(--accent); text-decoration: none; }
+        .btn-text:hover { text-decoration: underline; }
+
+        /* --- Center Panel (Chat) --- */
+        .chat-header {
+            padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex;
+            align-items: center; justify-content: space-between; background: var(--bg-panel);
+        }
+        .notebook-title { font-size: 1.1rem; font-weight: 600; background: transparent; border: none; color: var(--text-main); width: 200px; }
+        .notebook-title:focus { border-bottom: 1px solid var(--accent); }
+        .header-actions { display: flex; align-items: center; gap: 15px; }
+        .badge { background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; color: var(--text-muted); }
+        .badge.active-count { color: var(--accent); background: rgba(232, 197, 71, 0.1); }
+        .icon-btn { padding: 6px; border-radius: 6px; color: var(--text-muted); }
+        .icon-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-main); }
+
+        .chat-area { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
+        
+        .welcome-screen { margin: auto; text-align: center; max-width: 600px; padding: 20px; }
+        .welcome-icon { font-size: 48px; margin-bottom: 20px; }
+        .welcome-screen h2 { font-size: 1.8rem; margin-bottom: 10px; }
+        .welcome-screen p { color: var(--text-muted); margin-bottom: 30px; line-height: 1.5; }
+        .feature-chips { display: flex; justify-content: center; gap: 10px; margin-bottom: 40px; flex-wrap: wrap; }
+        .chip { background: rgba(255,255,255,0.05); padding: 8px 16px; border-radius: 20px; font-size: 0.85rem; }
+        .suggestions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+        .suggestion-pill {
+            border: 1px solid var(--accent); color: var(--accent); padding: 10px 16px; border-radius: 20px;
+            font-size: 0.9rem; transition: var(--transition); cursor: pointer; background: rgba(232, 197, 71, 0.05);
+        }
+        .suggestion-pill:hover { background: var(--accent); color: var(--bg-main); }
+
+        .message { max-width: 85%; display: flex; flex-direction: column; gap: 5px; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .msg-user { align-self: flex-end; }
+        .msg-user .bubble {
+            background: var(--accent); color: var(--bg-main); border-radius: 16px 16px 0 16px;
+            padding: 12px 18px; font-size: 0.95rem; line-height: 1.5;
+        }
+        
+        .msg-bot { align-self: flex-start; width: 100%; }
+        .bot-header { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; padding-left: 15px; }
+        .msg-bot .bubble {
+            background: var(--bg-panel); border-left: 3px solid var(--accent); border-radius: 0 16px 16px 16px;
+            padding: 16px 20px; font-size: 0.95rem; line-height: 1.6; position: relative;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .bubble-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 5px; opacity: 0; transition: opacity 0.2s; }
+        .msg-bot:hover .bubble-actions { opacity: 1; }
+        
+        .markdown p { margin-bottom: 10px; }
+        .markdown p:last-child { margin-bottom: 0; }
+        .markdown strong { color: #fff; }
+        .markdown ul { margin-left: 20px; margin-bottom: 10px; }
+        .markdown code { background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.85em; }
+        .citation { color: var(--accent); font-size: 0.8em; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(232, 197, 71, 0.4); }
+        .citation:hover { text-decoration-color: var(--accent); }
+
+        .sources-used { margin-top: 15px; font-size: 0.8rem; border-top: 1px solid var(--border); padding-top: 10px; }
+        .sources-used summary { color: var(--text-muted); cursor: pointer; user-select: none; list-style: none; display: flex; align-items: center; gap: 5px; }
+        .sources-used summary::-webkit-details-marker { display: none; }
+        .sources-used summary::before { content: '▶'; font-size: 0.7em; transition: transform 0.2s; }
+        .sources-used[open] summary::before { transform: rotate(90deg); }
+        .sources-used ul { list-style: none; margin-top: 8px; color: var(--text-muted); padding-left: 15px; }
+        .sources-used li { margin-bottom: 4px; }
+        .sources-used li::before { content: '📄'; margin-right: 5px; font-size: 0.9em; }
+
+        .msg-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 8px; padding-left: 15px; display: flex; gap: 10px; }
+
+        .thinking { display: flex; gap: 4px; padding: 15px; align-items: center; color: var(--accent); font-size: 0.9rem;}
+        .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+        .input-area { padding: 0 20px 20px 20px; background: linear-gradient(transparent, var(--bg-main) 20%); }
+        .warning-banner { background: rgba(248, 113, 113, 0.1); color: var(--error); padding: 10px; border-radius: 8px; font-size: 0.85rem; text-align: center; margin-bottom: 10px; display: none; border: 1px solid rgba(248, 113, 113, 0.2); }
+        .input-box {
+            background: var(--bg-panel); border: 1px solid var(--border); border-radius: 16px;
+            padding: 10px 15px; display: flex; align-items: flex-end; gap: 10px; transition: border-color 0.3s;
+        }
+        .input-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+        .input-box textarea {
+            flex: 1; background: transparent; border: none; color: var(--text-main); font-size: 1rem;
+            resize: none; max-height: 120px; padding: 8px 0; overflow-y: auto; line-height: 1.5;
+        }
+        .input-box textarea::placeholder { color: var(--text-muted); }
+        .send-btn {
+            background: var(--accent); color: var(--bg-main); width: 36px; height: 36px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; flex-shrink: 0; margin-bottom: 4px;
+        }
+        .send-btn:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+        .send-btn:not(:disabled):hover { background: var(--accent-hover); transform: scale(1.05); }
+        .input-hints { display: flex; justify-content: space-between; padding: 8px 10px 0; font-size: 0.75rem; color: var(--text-muted); }
+        .scope-toggle { cursor: pointer; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.05); transition: var(--transition); }
+        .scope-toggle:hover { background: rgba(255,255,255,0.1); color: var(--text-main); }
+        .scope-toggle.active-doc { background: rgba(232, 197, 71, 0.2); color: var(--accent); border: 1px solid var(--accent); }
+
+        /* --- Right Panel (Doc Viewer) --- */
+        .right-header { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .right-header h3 { font-size: 0.95rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+        .close-right-btn { display: none; } /* Mobile only */
+        
+        .doc-content { flex: 1; overflow-y: auto; padding: 20px; font-size: 0.9rem; line-height: 1.6; color: #d1d1d1; }
+        .doc-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--text-muted); padding: 20px; }
+        .doc-empty span { font-size: 40px; margin-bottom: 10px; opacity: 0.5; }
+        
+        .search-bar { padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; gap: 10px; }
+        .search-bar input { flex: 1; background: rgba(0,0,0,0.2); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; color: var(--text-main); font-size: 0.85rem; }
+        
+        .chunk-block { margin-bottom: 20px; position: relative; }
+        .chunk-label { font-size: 0.7rem; color: var(--accent); font-family: var(--font-mono); margin-bottom: 5px; display: block; border-bottom: 1px solid rgba(232, 197, 71, 0.2); padding-bottom: 2px; }
+        .highlight { background-color: rgba(232, 197, 71, 0.4); color: white; border-radius: 2px; padding: 0 2px; }
+        
+        .ask-doc-btn {
+            margin: 0 20px 20px; padding: 10px; background: rgba(232, 197, 71, 0.1); border: 1px solid var(--accent);
+            color: var(--accent); border-radius: 8px; text-align: center; font-size: 0.9rem; font-weight: 500;
+        }
+        .ask-doc-btn:hover { background: var(--accent); color: var(--bg-main); }
+
+        /* Modals & Toasts */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6);
+            z-index: 100; display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal-content { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; width: 400px; max-width: 90%; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transform: translateY(20px); transition: transform 0.2s; }
+        .modal-overlay.active .modal-content { transform: translateY(0); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h2 { font-size: 1.2rem; }
+        .setting-group { margin-bottom: 20px; }
+        .setting-group label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-muted); }
+        input[type="range"] { width: 100%; accent-color: var(--accent); }
+        .btn-danger { background: rgba(248, 113, 113, 0.1); color: var(--error); border: 1px solid var(--error); padding: 10px; border-radius: 6px; width: 100%; margin-top: 10px; }
+        .btn-danger:hover { background: var(--error); color: white; }
+
+        .toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(50px);
+            background: var(--success); color: #000; padding: 10px 20px; border-radius: 20px;
+            font-weight: 500; opacity: 0; transition: all 0.3s; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        /* RTL (Arabic) Support */
+        [dir="rtl"] #left-panel { border-right: none; border-left: 1px solid var(--border); }
+        [dir="rtl"] #right-panel { border-left: none; border-right: 1px solid var(--border); }
+        [dir="rtl"] .bot-header { padding-left: 0; padding-right: 15px; }
+        [dir="rtl"] .msg-bot .bubble { border-left: none; border-right: 3px solid var(--accent); border-radius: 16px 0 16px 16px; }
+        [dir="rtl"] .msg-user .bubble { border-radius: 16px 16px 16px 0; }
+        [dir="rtl"] .bubble-actions { right: auto; left: 10px; }
+        [dir="rtl"] .msg-meta { padding-left: 0; padding-right: 15px; }
+        [dir="rtl"] .sources-used ul { padding-left: 0; padding-right: 15px; }
+        [dir="rtl"] .sources-used li::before { margin-right: 0; margin-left: 5px; }
+        [dir="rtl"] .input-box { flex-direction: row; }
+
+        /* Mobile Responsive */
+        @media (max-width: 900px) {
+            #right-panel { position: fixed; right: -320px; top: 0; bottom: 0; z-index: 50; box-shadow: -5px 0 15px rgba(0,0,0,0.3); }
+            #right-panel.open { transform: translateX(-320px); }
+            .close-right-btn { display: block; }
+        }
+        @media (max-width: 768px) {
+            #left-panel { position: fixed; left: -280px; top: 0; bottom: 0; z-index: 50; box-shadow: 5px 0 15px rgba(0,0,0,0.3); }
+            #left-panel.open { transform: translateX(280px); }
+            .mobile-menu-btn { display: block; }
+        }
+        .mobile-menu-btn { display: none; }
+        @media (min-width: 769px) { .mobile-menu-btn { display: none !important; } }
+    </style>
+</head>
+<body>
+
+    <!-- Left Panel: Sources -->
+    <aside id="left-panel">
+        <div class="panel-header">
+            <div class="animated-bg"></div>
+            <div class="logo-area">
+                <span class="logo-icon">⚖️</span>
+                <div class="logo-text">
+                    <h1>LexAI</h1>
+                    <p>Research Assistant</p>
+                </div>
+            </div>
+            <button class="btn-primary" id="btn-add-source">
+                <span>＋</span> Add Source
+            </button>
+        </div>
+
+        <div class="sources-list no-scrollbar" id="sources-container">
+            <div class="upload-zone" id="upload-zone">
+                <p style="font-size: 24px; margin-bottom: 10px;">📄</p>
+                <p>Drag & Drop PDFs here<br>or click to browse</p>
+                <input type="file" id="file-input" multiple accept="application/pdf">
+            </div>
+            <div id="processing-indicator" style="display: none; text-align: center; color: var(--accent); font-size: 0.8rem; margin-top: 10px;">
+                Processing PDFs... <span class="dot" style="display:inline-block; width:4px; height:4px; margin-left:2px;"></span>
+            </div>
+            <div id="sources-list">
+                <!-- Source cards injected here -->
+            </div>
+        </div>
+
+        <div class="api-key-section">
+            <div class="api-header" id="api-header-toggle">
+                <span>🔑 Gemini API Key</span>
+                <div class="api-status" id="api-status-dot"></div>
+            </div>
+            <div class="api-content" id="api-content">
+                <div class="api-input-group">
+                    <input type="password" id="api-key-input" placeholder="Paste your API Key..." dir="auto">
+                    <button class="icon-btn" id="btn-toggle-key">👁</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="btn-text">Get API key →</a>
+                    <button class="btn-text" id="btn-save-key" style="color: var(--success); font-weight: bold;">Save ✓</button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Center Panel: Chat -->
+    <main id="center-panel">
+        <header class="chat-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="icon-btn mobile-menu-btn" id="btn-mobile-menu">☰</button>
+                <input type="text" class="notebook-title" id="notebook-title" value="My Research" dir="auto">
+            </div>
+            <div class="header-actions">
+                <span class="badge active-count" id="active-sources-badge">Active Sources: 0</span>
+                <button class="icon-btn" id="btn-lang" title="عربي / English">ع/EN</button>
+                <button class="icon-btn" id="btn-export" title="Export Chat">⬇</button>
+                <button class="icon-btn" id="btn-settings" title="Settings">⚙</button>
+            </div>
+        </header>
+
+        <div class="chat-area no-scrollbar" id="chat-area" dir="auto">
+            <!-- Welcome Screen -->
+            <div class="welcome-screen" id="welcome-screen">
+                <div class="welcome-icon">⚖️</div>
+                <h2>Ask anything about your sources</h2>
+                <p>Upload PDFs on the left, then ask questions. LexAI searches across all active sources and gives you cited answers.</p>
+                <div class="feature-chips">
+                    <span class="chip">📚 Multi-document search</span>
+                    <span class="chip">🔍 Cited answers</span>
+                    <span class="chip">💬 Natural conversation</span>
+                </div>
+                <div class="suggestions">
+                    <button class="suggestion-pill" onclick="fillInput('Summarize all uploaded documents')">Summarize all documents</button>
+                    <button class="suggestion-pill" onclick="fillInput('Are there any traps, risks, or one-sided clauses in this contract?')">Find hidden traps</button>
+                    <button class="suggestion-pill" onclick="fillInput('Is this contract worth signing? What are the main risks?')">Evaluate risks</button>
+                    <button class="suggestion-pill" onclick="fillInput('What penalties or consequences are described?')">Penalties & consequences</button>
+                </div>
+            </div>
+            <!-- Messages injected here -->
+        </div>
+
+        <div class="input-area glass">
+            <div class="warning-banner" id="warning-banner"></div>
+            <div class="input-hints">
+                <span>Enter to send · Shift+Enter for new line</span>
+                <span class="scope-toggle" id="scope-toggle" title="Click to toggle scope">🌐 All Sources</span>
+            </div>
+            <div class="input-box">
+                <textarea id="chat-input" rows="1" placeholder="Ask a question about your sources..." dir="auto"></textarea>
+                <button class="send-btn" id="btn-send" disabled>➤</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Right Panel: Document Viewer -->
+    <aside id="right-panel">
+        <div class="right-header">
+            <h3 id="doc-viewer-title">📖 Document Preview</h3>
+            <button class="icon-btn close-right-btn" id="btn-close-right">✕</button>
+        </div>
+        <div class="search-bar" id="doc-search-bar" style="display: none;">
+            <input type="text" id="doc-search-input" placeholder="Search in document..." dir="auto">
+        </div>
+        <div class="doc-content no-scrollbar" id="doc-content" dir="auto">
+            <div class="doc-empty">
+                <span>📄</span>
+                <p>Click a source on the left to preview its content here</p>
+            </div>
+        </div>
+        <button class="ask-doc-btn" id="btn-ask-doc" style="display: none;">Ask about this doc →</button>
+    </aside>
+
+    <!-- Modals & Overlays -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="icon-btn" onclick="closeModal()">✕</button>
+            </div>
+            <div class="setting-group">
+                <label>
+                    <span>Temperature (Creativity)</span>
+                    <span id="temp-val">0.3</span>
+                </label>
+                <input type="range" id="setting-temp" min="0" max="1" step="0.1" value="0.3">
+            </div>
+            <div class="setting-group">
+                <label>
+                    <span>Max Chunks Retrieved</span>
+                    <span id="chunks-val">6</span>
+                </label>
+                <input type="range" id="setting-chunks" min="3" max="15" step="1" value="6">
+                <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 5px;">Higher means more context, but uses more tokens/time.</small>
+            </div>
+            <button class="btn-danger" id="btn-clear-chat">🗑 Clear Conversation</button>
+            <button class="btn-danger" id="btn-clear-all" style="margin-top: 10px; background: transparent; border-color: var(--text-muted); color: var(--text-muted);">⚠ Delete All Data & Sources</button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">Copied! ✓</div>
+
+    <script>
+        // --- State Management ---
+        const WORDS_PER_CHUNK = 400; // Optimal chunk size for embedding/RAG context
+        let state = {
+            apiKey: localStorage.getItem('lexai_apikey') || '',
+            sources: JSON.parse(localStorage.getItem('lexai_sources')) || [],
+            messages: JSON.parse(localStorage.getItem('lexai_messages')) || [],
+            selectedSourceId: null,
+            notebookTitle: localStorage.getItem('lexai_title') || 'My Research',
+            settings: JSON.parse(localStorage.getItem('lexai_settings')) || { temperature: 0.3, maxChunks: 6 },
+            targetDocId: null, // For @source or per-document questions
+            lang: localStorage.getItem('lexai_lang') || 'en'
+        };
+
+        const i18n = {
+            en: {
+                subtitle: "Research Assistant",
+                addSource: "<span>＋</span> Add Source",
+                dragDrop: "Drag & Drop PDFs here<br>or click to browse",
+                processing: "Processing PDFs... <span class='dot' style='display:inline-block; width:4px; height:4px; margin-left:2px;'></span>",
+                apiKey: "🔑 Gemini API Key",
+                pasteKey: "Paste your API Key...",
+                getKey: "Get API key →",
+                saveKey: "Save ✓",
+                activeSources: "Active Sources:",
+                welcomeTitle: "Ask anything about your sources",
+                welcomeSubtitle: "Upload PDFs on the left, then ask questions. LexAI searches across all active sources and gives you cited answers.",
+                chip1: "📚 Multi-document search",
+                chip2: "🔍 Cited answers",
+                chip3: "💬 Natural conversation",
+                sug1: "Summarize all uploaded documents",
+                sug2: "Are there any traps, risks, or one-sided clauses in this contract?",
+                sug3: "Is this contract worth signing? What are the main risks?",
+                sug4: "What penalties or consequences are described?",
+                inputHint: "Enter to send · Shift+Enter for new line",
+                allSources: "🌐 All Sources",
+                placeholder: "Ask a question about your sources...",
+                docPreview: "📖 Document Preview",
+                emptyDoc: "<span>📄</span><p>Click a source on the left to preview its content here</p>",
+                askDoc: "Ask about this doc →",
+                settings: "Settings",
+                clearChat: "🗑 Clear Conversation",
+                deleteAll: "⚠ Delete All Data & Sources",
+                noteReload: "Note: Original PDF view unavailable after reload. Showing extracted text. Re-upload to view original."
+            },
+            ar: {
+                subtitle: "مساعد البحث",
+                addSource: "<span>＋</span> إضافة مصدر",
+                dragDrop: "اسحب وأفلت ملفات PDF هنا<br>أو انقر للتصفح",
+                processing: "جاري المعالجة... <span class='dot' style='display:inline-block; width:4px; height:4px; margin-left:2px;'></span>",
+                apiKey: "🔑 مفتاح API لـ Gemini",
+                pasteKey: "الصق مفتاح API الخاص بك...",
+                getKey: "احصل على مفتاح API ←",
+                saveKey: "حفظ ✓",
+                activeSources: "المصادر النشطة:",
+                welcomeTitle: "اسأل أي شيء عن مصادرك",
+                welcomeSubtitle: "قم بتحميل ملفات PDF على اليسار، ثم اطرح الأسئلة. يبحث LexAI عبر جميع المصادر النشطة ويمنحك إجابات موثقة.",
+                chip1: "📚 بحث في مستندات متعددة",
+                chip2: "🔍 إجابات موثقة",
+                chip3: "💬 محادثة طبيعية",
+                sug1: "لخص جميع المستندات المحملة",
+                sug2: "هل هناك أي فخاخ أو مخاطر أو شروط متحيزة في هذا العقد؟",
+                sug3: "هل يستحق هذا العقد التوقيع؟ ما هي المخاطر الرئيسية؟",
+                sug4: "ما هي العقوبات أو العواقب الموصوفة؟",
+                inputHint: "Enter للإرسال · Shift+Enter لسطر جديد",
+                allSources: "🌐 جميع المصادر",
+                placeholder: "اطرح سؤالاً حول مصادرك...",
+                docPreview: "📖 معاينة المستند",
+                emptyDoc: "<span>📄</span><p>انقر على مصدر على اليسار لمعاينة محتواه هنا</p>",
+                askDoc: "اسأل عن هذا المستند ←",
+                settings: "الإعدادات",
+                clearChat: "🗑 مسح المحادثة",
+                deleteAll: "⚠ حذف جميع البيانات والمصادر",
+                noteReload: "ملاحظة: معاينة ملف PDF الأصلي غير متاحة بعد تحديث الصفحة. يتم عرض النص المستخرج. أعد التحميل لعرض الأصل."
+            }
+        };
+
+        function applyLanguage() {
+            const l = state.lang;
+            document.documentElement.lang = l;
+            document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+            
+            document.querySelector('.logo-text p').innerHTML = i18n[l].subtitle;
+            D.btnAddSource.innerHTML = i18n[l].addSource;
+            if(D.uploadZone.querySelector('p:nth-child(2)')) {
+                D.uploadZone.querySelector('p:nth-child(2)').innerHTML = i18n[l].dragDrop;
+            }
+            D.indicator.innerHTML = i18n[l].processing;
+            D.apiHeaderToggle.querySelector('span').innerText = i18n[l].apiKey;
+            D.apiKeyInput.placeholder = i18n[l].pasteKey;
+            D.apiContent.querySelector('a').innerText = i18n[l].getKey;
+            D.btnSaveKey.innerText = i18n[l].saveKey;
+            
+            D.welcomeScreen.querySelector('h2').innerText = i18n[l].welcomeTitle;
+            D.welcomeScreen.querySelector('p').innerText = i18n[l].welcomeSubtitle;
+            
+            const chips = D.welcomeScreen.querySelectorAll('.chip');
+            if(chips.length === 3) {
+                chips[0].innerText = i18n[l].chip1;
+                chips[1].innerText = i18n[l].chip2;
+                chips[2].innerText = i18n[l].chip3;
+            }
+            
+            const pills = D.welcomeScreen.querySelectorAll('.suggestion-pill');
+            if(pills.length === 4) {
+                pills[0].innerText = i18n[l].sug1;
+                pills[1].innerText = i18n[l].sug2;
+                pills[2].innerText = i18n[l].sug3;
+                pills[3].innerText = i18n[l].sug4;
+            }
+            
+            D.chatInput.placeholder = i18n[l].placeholder;
+            document.querySelector('.input-hints span:first-child').innerText = i18n[l].inputHint;
+            if(!state.targetDocId) D.scopeToggle.innerText = i18n[l].allSources;
+            
+            if(!state.selectedSourceId) {
+                D.docViewerTitle.innerText = i18n[l].docPreview;
+                D.docContent.querySelector('.doc-empty').innerHTML = i18n[l].emptyDoc;
+            }
+            D.btnAskDoc.innerText = i18n[l].askDoc;
+            
+            D.settingsModal.querySelector('h2').innerText = i18n[l].settings;
+            document.getElementById('btn-clear-chat').innerText = i18n[l].clearChat;
+            document.getElementById('btn-clear-all').innerText = i18n[l].deleteAll;
+            
+            renderSources();
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem('lexai_apikey', state.apiKey);
+                localStorage.setItem('lexai_title', state.notebookTitle);
+                localStorage.setItem('lexai_settings', JSON.stringify(state.settings));
+                localStorage.setItem('lexai_messages', JSON.stringify(state.messages));
+                localStorage.setItem('lexai_lang', state.lang);
+                // Handle potential QuotaExceededError for large PDFs
+                try {
+                    localStorage.setItem('lexai_sources', JSON.stringify(state.sources));
+                } catch (e) {
+                    console.warn("Local storage full, saving without full text content");
+                    showToast("Storage full: Sources won't persist after refresh.");
+                }
+            } catch (e) {
+                console.error("Failed to save state:", e);
+            }
+        }
+
+        // --- DOM Elements ---
+        const D = {
+            sourcesList: document.getElementById('sources-list'),
+            uploadZone: document.getElementById('upload-zone'),
+            fileInput: document.getElementById('file-input'),
+            btnAddSource: document.getElementById('btn-add-source'),
+            indicator: document.getElementById('processing-indicator'),
+            apiHeaderToggle: document.getElementById('api-header-toggle'),
+            apiContent: document.getElementById('api-content'),
+            apiKeyInput: document.getElementById('api-key-input'),
+            btnToggleKey: document.getElementById('btn-toggle-key'),
+            btnSaveKey: document.getElementById('btn-save-key'),
+            apiStatusDot: document.getElementById('api-status-dot'),
+            chatArea: document.getElementById('chat-area'),
+            welcomeScreen: document.getElementById('welcome-screen'),
+            chatInput: document.getElementById('chat-input'),
+            btnSend: document.getElementById('btn-send'),
+            warningBanner: document.getElementById('warning-banner'),
+            notebookTitle: document.getElementById('notebook-title'),
+            activeBadge: document.getElementById('active-sources-badge'),
+            docViewerTitle: document.getElementById('doc-viewer-title'),
+            docContent: document.getElementById('doc-content'),
+            btnAskDoc: document.getElementById('btn-ask-doc'),
+            docSearchBar: document.getElementById('doc-search-bar'),
+            docSearchInput: document.getElementById('doc-search-input'),
+            scopeToggle: document.getElementById('scope-toggle'),
+            settingsModal: document.getElementById('settings-modal')
+        };
+
+        // --- Initialization ---
+        let pdfjs = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+        if (pdfjs) {
+            pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        function init() {
+            D.notebookTitle.value = state.notebookTitle;
+            D.apiKeyInput.value = state.apiKey;
+            if (state.apiKey) D.apiStatusDot.classList.add('has-key');
+            
+            document.getElementById('setting-temp').value = state.settings.temperature;
+            document.getElementById('temp-val').innerText = state.settings.temperature;
+            document.getElementById('setting-chunks').value = state.settings.maxChunks;
+            document.getElementById('chunks-val').innerText = state.settings.maxChunks;
+
+            applyLanguage();
+            renderSources();
+            renderMessages();
+            updateUIState();
+            setupEventListeners();
+        }
+
+        // --- PDF Processing ---
+        async function renderPdfToContainer(container, blobUrl) {
+            container.innerHTML = '<div style="text-align:center; padding:20px;">Loading PDF...</div>';
+            
+            const loadingTask = pdfjs.getDocument(blobUrl);
+            const pdf = await loadingTask.promise;
+            container.innerHTML = ''; // Clear loading
+            
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const viewport = page.getViewport({ scale: 1.5 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                canvas.style.display = 'block';
+                canvas.style.margin = '10px auto';
+                canvas.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                container.appendChild(canvas);
+                
+                await page.render({ canvasContext: context, viewport: viewport }).promise;
+            }
+        }
+
+        async function handleFiles(files) {
+            D.uploadZone.style.display = 'none';
+            D.indicator.style.display = 'block';
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.type !== 'application/pdf') continue;
+                
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+                    let fullText = '';
+                    
+                    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                        const page = await pdf.getPage(pageNum);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + ' \n';
+                    }
+
+                    fullText = fullText.replace(/\s+/g, ' ').trim();
+                    const words = fullText.split(' ');
+                    const chunks = [];
+                    for (let j = 0; j < words.length; j += WORDS_PER_CHUNK) {
+                        chunks.push(words.slice(j, j + WORDS_PER_CHUNK).join(' '));
+                    }
+
+                    const blobUrl = URL.createObjectURL(file);
+
+                    const newSource = {
+                        id: 'src_' + Date.now() + '_' + i,
+                        name: file.name,
+                        wordCount: words.length,
+                        chunks: chunks,
+                        active: true,
+                        blobUrl: blobUrl
+                    };
+                    state.sources.push(newSource);
+                    
+                } catch (err) {
+                    console.error(`Error reading ${file.name}:`, err);
+                    showToast(`Error parsing ${file.name}`);
+                }
+            }
+            
+            D.indicator.style.display = 'none';
+            saveState();
+            renderSources();
+            updateUIState();
+        }
+
+        // --- Rendering ---
+        function renderSources() {
+            D.sourcesList.innerHTML = '';
+            let activeCount = 0;
+            const l = state.lang;
+
+            if (state.sources.length === 0) {
+                D.uploadZone.style.display = 'block';
+            }
+
+            state.sources.forEach(source => {
+                if (source.active) activeCount++;
+                
+                const card = document.createElement('div');
+                card.className = `source-card ${state.selectedSourceId === source.id ? 'glow' : ''}`;
+                card.id = `card-${source.id}`;
+                card.innerHTML = `
+                    <div class="source-header" onclick="selectSource('${source.id}')">
+                        <div class="source-title">
+                            📄 <span>${source.name}</span>
+                        </div>
+                        <div class="toggle-dot ${source.active ? 'active' : ''}" onclick="toggleSource('${source.id}', event)" title="Toggle inclusion in chat"></div>
+                    </div>
+                    <div class="source-stats" onclick="selectSource('${source.id}')">
+                        <span>${source.chunks.length} chunks</span>
+                        <span>•</span>
+                        <span>~${Math.ceil(source.wordCount / 200)} min read</span>
+                    </div>
+                `;
+                D.sourcesList.appendChild(card);
+            });
+            
+            D.activeBadge.innerText = `${i18n[l].activeSources} ${activeCount}`;
+            D.activeBadge.className = activeCount > 0 ? 'badge active-count' : 'badge';
+        }
+
+        function renderMessages() {
+            // Remove old messages but keep welcome screen
+            const msgs = D.chatArea.querySelectorAll('.message');
+            msgs.forEach(m => m.remove());
+
+            if (state.messages.length === 0) {
+                D.welcomeScreen.style.display = 'block';
+            } else {
+                D.welcomeScreen.style.display = 'none';
+                state.messages.forEach(msg => {
+                    appendMessageToDOM(msg);
+                });
+                scrollToBottom();
+            }
+        }
+
+        function appendMessageToDOM(msg) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `message ${msg.role === 'user' ? 'msg-user' : 'msg-bot'}`;
+            
+            if (msg.role === 'user') {
+                wrapper.innerHTML = `<div class="bubble">${escapeHTML(msg.content)}</div>`;
+            } else {
+                // Parse markdown and citations
+                let formattedContent = msg.content
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    .replace(/\n/g, '<br>');
+                
+                // Color citations [Source: "Doc", §N]
+                formattedContent = formattedContent.replace(/\[Source:[^\]]+\]/g, match => `<span class="citation">${match}</span>`);
+
+                let sourcesHtml = '';
+                if (msg.sourcesUsed && msg.sourcesUsed.length > 0) {
+                    const uniqueSources = [...new Set(msg.sourcesUsed)];
+                    const listItems = uniqueSources.map(s => `<li>${escapeHTML(s)}</li>`).join('');
+                    sourcesHtml = `
+                        <details class="sources-used">
+                            <summary>Sources Referenced (${uniqueSources.length})</summary>
+                            <ul>${listItems}</ul>
+                        </details>
+                    `;
+                }
+
+                wrapper.innerHTML = `
+                    <div class="bot-header"><span style="font-size:12px">⚖️</span> LexAI</div>
+                    <div class="bubble markdown">
+                        <div class="bubble-actions">
+                            <button class="icon-btn" onclick="copyText(this, \`${escapeHTML(msg.content).replace(/`/g, '\\`')}\`)" title="Copy text">📋</button>
+                        </div>
+                        <div>${formattedContent}</div>
+                        ${sourcesHtml}
+                    </div>
+                    <div class="msg-meta">
+                        <span>🔍 ${msg.chunksSearched || 0} chunks</span>
+                        <span>⚡ Gemini 2.5 Flash</span>
+                    </div>
+                `;
+            }
+            D.chatArea.appendChild(wrapper);
+        }
+
+        function renderRightPanel() {
+            const l = state.lang;
+            if (!state.selectedSourceId) {
+                D.docViewerTitle.innerText = i18n[l].docPreview;
+                D.docContent.innerHTML = `<div class="doc-empty">${i18n[l].emptyDoc}</div>`;
+                D.btnAskDoc.style.display = 'none';
+                D.docSearchBar.style.display = 'none';
+                return;
+            }
+
+            const source = state.sources.find(s => s.id === state.selectedSourceId);
+            if (!source) return;
+
+            D.docViewerTitle.innerText = source.name;
+            
+            if (source.blobUrl) {
+                // Native PDF rendering using canvas
+                renderPdfToContainer(D.docContent, source.blobUrl);
+                D.docSearchBar.style.display = 'none';
+            } else {
+                D.docSearchBar.style.display = 'flex';
+                // ... fallback text render code ...
+            }
+            
+            D.btnAskDoc.style.display = 'block';
+            D.btnAskDoc.onclick = () => {
+                state.targetDocId = source.id;
+                D.scopeToggle.innerText = `📄 ${source.name.substring(0,15)}...`;
+                D.scopeToggle.classList.add('active-doc');
+                fillInput(`In ${source.name}, `);
+                if (window.innerWidth <= 900) {
+                    document.getElementById('right-panel').classList.remove('open');
+                }
+            };
+        }
+
+        function updateUIState() {
+            const activeCount = state.sources.filter(s => s.active).length;
+            let warning = '';
+            let canSend = true;
+
+            if (!state.apiKey) {
+                warning = '⚠ Add your Gemini API key in the left panel to start chatting.';
+                canSend = false;
+            } else if (activeCount === 0 && state.sources.length === 0) {
+                warning = '⚠ Upload at least one PDF source to begin.';
+                canSend = false;
+            } else if (activeCount === 0) {
+                warning = '⚠ Toggle on at least one source in the left panel to search.';
+                canSend = false;
+            }
+
+            if (warning) {
+                D.warningBanner.innerText = warning;
+                D.warningBanner.style.display = 'block';
+            } else {
+                D.warningBanner.style.display = 'none';
+            }
+
+            D.btnSend.disabled = !canSend || D.chatInput.value.trim() === '';
+            
+            // Adjust input height
+            D.chatInput.style.height = 'auto';
+            D.chatInput.style.height = (D.chatInput.scrollHeight) + 'px';
+        }
+
+        // --- Chat Logic & Gemini API ---
+        async function callGemini(systemPrompt, userPrompt, jsonMode = false) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.apiKey}`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: systemPrompt + "\n\n" + userPrompt }] }],
+                generationConfig: {
+                    temperature: parseFloat(state.settings.temperature)
+                }
+            };
+
+            if (jsonMode) {
+                payload.generationConfig.responseMimeType = "application/json";
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error?.message || "API Request Failed");
+            }
+
+            const data = await response.json();
+            return data.candidates[0].content.parts[0].text;
+        }
+
+        async function handleSend() {
+            const text = D.chatInput.value.trim();
+            if (!text) return;
+
+            // Add user message
+            const userMsg = { role: 'user', content: text };
+            state.messages.push(userMsg);
+            appendMessageToDOM(userMsg);
+            
+            D.chatInput.value = '';
+            updateUIState();
+            scrollToBottom();
+
+            // Show thinking
+            const thinkingDiv = document.createElement('div');
+            thinkingDiv.className = 'message msg-bot';
+            thinkingDiv.innerHTML = `<div class="bubble"><div class="thinking">Researching sources <span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div>`;
+            D.chatArea.appendChild(thinkingDiv);
+            scrollToBottom();
+
+            try {
+                // Agent 1: Context Builder
+                let activeSources = state.sources.filter(s => s.active);
+                if (state.targetDocId) {
+                    activeSources = state.sources.filter(s => s.id === state.targetDocId);
+                }
+                
+                let allChunks = [];
+                activeSources.forEach(source => {
+                    source.chunks.forEach((chunk, index) => {
+                        allChunks.push({ sourceName: source.name, id: `${source.id}_${index}`, text: chunk, originalIndex: index + 1 });
+                    });
+                });
+
+                let chunksToUse = allChunks;
+                let chunksSearched = allChunks.length;
+
+                // Agent 2: Chunk Selector (if too many chunks)
+                const maxChunks = parseInt(state.settings.maxChunks);
+                if (allChunks.length > maxChunks && allChunks.length > 0) {
+                    thinkingDiv.querySelector('.thinking').innerHTML = `Selecting most relevant sections <span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
+                    
+                    const chunkSummaries = allChunks.map((c, i) => `[ID: ${i}] Source: ${c.sourceName}`).join('\n');
+                    const selectionPrompt = `Given the user question: "${text}"\n\nWhich of the following document chunks are likely to contain the answer? Return ONLY a JSON array of integers representing the IDs of the top ${maxChunks} most relevant chunks. Example: [0, 3, 5]. If none seem relevant, return an empty array [].\n\nCHUNKS AVAILABLE:\n${chunkSummaries}`;
+                    
+                    try {
+                        const jsonResponse = await callGemini("You are a retrieval assistant. Output valid JSON array of integers only.", selectionPrompt, true);
+                        const selectedIndices = JSON.parse(jsonResponse);
+                        if (Array.isArray(selectedIndices)) {
+                            chunksToUse = selectedIndices.map(i => allChunks[i]).filter(c => c !== undefined);
+                        }
+                    } catch (e) {
+                        console.warn("Chunk selection failed or returned invalid JSON, using fallback slice", e);
+                        chunksToUse = allChunks.slice(0, maxChunks); // Fallback
+                    }
+                }
+
+                // Agent 3: Answer Generator
+                thinkingDiv.querySelector('.thinking').innerHTML = `Reading and writing answer <span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
+                
+                let contextText = chunksToUse.map(c => `[Source: "${c.sourceName}", §${c.originalIndex}]\n${c.text}`).join('\n\n');
+                
+                if (chunksToUse.length === 0) {
+                    contextText = "No relevant context found in the active documents.";
+                }
+
+                const langInstruction = state.lang === 'ar' 
+                    ? "You MUST formulate your entire response in Arabic." 
+                    : "You MUST formulate your entire response in English.";
+
+                const systemPrompt = `You are LexAI, an expert legal and general research assistant. 
+Your task is to answer the user's question using ONLY the provided DOCUMENT EXCERPTS.
+RULES:
+1. Cite facts explicitly using the format [Source: "Document Name", §SectionNumber].
+2. If the answer is not contained in the excerpts, clearly state that you cannot find the answer in the provided documents. Do not make up information.
+3. Be structured, professional, thorough but concise. Use markdown for bolding, bullet points, and structure.
+4. IMPORTANT: If the user asks for advice, opinions, risk analysis, "traps", or whether a contract is "worth doing", you MUST act as a sharp legal analyst. Actively highlight one-sided clauses, unfair terms, hidden obligations, and risks found IN THE EXCERPTS. Provide a strategic assessment based on these findings.
+5. ${langInstruction}`;
+
+                const userPrompt = `DOCUMENT EXCERPTS:\n${contextText}\n\nUSER QUESTION:\n${text}\n\nANSWER:`;
+
+                const finalAnswer = await callGemini(systemPrompt, userPrompt);
+                
+                // Extract sources used for metadata
+                const sourcesUsedList = [];
+                chunksToUse.forEach(c => {
+                    if (finalAnswer.includes(c.sourceName) || finalAnswer.includes(`[Source: "${c.sourceName}"`)) {
+                        sourcesUsedList.push(c.sourceName);
+                    }
+                });
+
+                const botMsg = {
+                    role: 'bot',
+                    content: finalAnswer,
+                    sourcesUsed: sourcesUsedList,
+                    chunksSearched: chunksSearched
+                };
+
+                state.messages.push(botMsg);
+                thinkingDiv.remove();
+                appendMessageToDOM(botMsg);
+                
+                // Highlight sources briefly
+                sourcesUsedList.forEach(name => {
+                    const src = state.sources.find(s => s.name === name);
+                    if (src) {
+                        const card = document.getElementById(`card-${src.id}`);
+                        if(card) {
+                            card.classList.add('glow');
+                            setTimeout(() => card.classList.remove('glow'), 2000);
+                        }
+                    }
+                });
+
+                saveState();
+
+            } catch (error) {
+                thinkingDiv.remove();
+                const errorMsg = { role: 'bot', content: `**Error:** ${error.message}` };
+                state.messages.push(errorMsg);
+                appendMessageToDOM(errorMsg);
+            }
+        }
+
+        // --- Interactions & Utils ---
+        function selectSource(id) {
+            state.selectedSourceId = id;
+            renderSources(); // Update highlight
+            renderRightPanel();
+            if (window.innerWidth <= 900) {
+                document.getElementById('right-panel').classList.add('open');
+            }
+        }
+
+        function toggleSource(id, event) {
+            event.stopPropagation();
+            const source = state.sources.find(s => s.id === id);
+            if (source) {
+                source.active = !source.active;
+                saveState();
+                renderSources();
+                updateUIState();
+            }
+        }
+
+        function fillInput(text) {
+            D.chatInput.value = text;
+            updateUIState();
+            D.chatInput.focus();
+        }
+
+        function scrollToBottom() {
+            D.chatArea.scrollTop = D.chatArea.scrollHeight;
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        function copyText(btn, text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Copied to clipboard! ✓');
+            }).catch(() => {
+                // Fallback for older browsers/iframes
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('Copied to clipboard! ✓');
+                } catch (err) {
+                    console.error('Copy fallback failed', err);
+                }
+                document.body.removeChild(textArea);
+            });
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        function closeModal() {
+            D.settingsModal.classList.remove('active');
+        }
+
+        // --- Event Listeners ---
+        function setupEventListeners() {
+            // Upload interactions
+            D.btnAddSource.onclick = () => {
+                D.uploadZone.style.display = D.uploadZone.style.display === 'block' ? 'none' : 'block';
+            };
+            D.uploadZone.onclick = () => D.fileInput.click();
+            D.fileInput.onchange = (e) => handleFiles(e.target.files);
+            
+            D.uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); D.uploadZone.classList.add('dragover'); });
+            D.uploadZone.addEventListener('dragleave', () => D.uploadZone.classList.remove('dragover'));
+            D.uploadZone.addEventListener('drop', (e) => {
+                e.preventDefault(); D.uploadZone.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+
+            // API Key
+            D.apiHeaderToggle.onclick = () => D.apiContent.classList.toggle('open');
+            D.btnToggleKey.onclick = () => {
+                D.apiKeyInput.type = D.apiKeyInput.type === 'password' ? 'text' : 'password';
+            };
+            D.btnSaveKey.onclick = () => {
+                state.apiKey = D.apiKeyInput.value.trim();
+                if(state.apiKey) D.apiStatusDot.classList.add('has-key');
+                else D.apiStatusDot.classList.remove('has-key');
+                saveState();
+                updateUIState();
+                showToast('API Key saved!');
+            };
+            D.apiKeyInput.addEventListener('change', () => D.btnSaveKey.click());
+
+            // Language Toggle
+            document.getElementById('btn-lang').onclick = () => {
+                state.lang = state.lang === 'en' ? 'ar' : 'en';
+                saveState();
+                applyLanguage();
+            };
+
+            // Chat Input
+            D.chatInput.addEventListener('input', () => {
+                updateUIState();
+                // Check for @mention logic could go here
+            });
+            D.chatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!D.btnSend.disabled) handleSend();
+                }
+            });
+            D.btnSend.onclick = handleSend;
+
+            // Scope Toggle
+            D.scopeToggle.onclick = () => {
+                const l = state.lang;
+                if (state.targetDocId) {
+                    state.targetDocId = null;
+                    D.scopeToggle.innerText = i18n[l].allSources;
+                    D.scopeToggle.classList.remove('active-doc');
+                }
+            };
+
+            // Title
+            D.notebookTitle.addEventListener('blur', (e) => {
+                state.notebookTitle = e.target.value || 'My Research';
+                saveState();
+            });
+
+            // Search in Document
+            D.docSearchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase();
+                const chunks = D.docContent.querySelectorAll('.chunk-block');
+                if(!term) {
+                    chunks.forEach(c => {
+                        c.style.display = 'block';
+                        const txt = c.querySelector('.chunk-text');
+                        if(txt) txt.innerHTML = escapeHTML(txt.textContent); // remove highlights
+                    });
+                    return;
+                }
+                
+                chunks.forEach(c => {
+                    const textNode = c.querySelector('.chunk-text');
+                    if(!textNode) return;
+                    const originalText = textNode.textContent;
+                    if (originalText.toLowerCase().includes(term)) {
+                        c.style.display = 'block';
+                        // Simple highlight (case insensitive)
+                        const regex = new RegExp(`(${term})`, 'gi');
+                        textNode.innerHTML = escapeHTML(originalText).replace(regex, '<span class="highlight">$1</span>');
+                    } else {
+                        c.style.display = 'none';
+                    }
+                });
+            });
+
+            // Settings & Export
+            document.getElementById('btn-settings').onclick = () => D.settingsModal.classList.add('active');
+            
+            document.getElementById('setting-temp').oninput = (e) => {
+                document.getElementById('temp-val').innerText = e.target.value;
+                state.settings.temperature = e.target.value;
+                saveState();
+            };
+            document.getElementById('setting-chunks').oninput = (e) => {
+                document.getElementById('chunks-val').innerText = e.target.value;
+                state.settings.maxChunks = e.target.value;
+                saveState();
+            };
+
+            document.getElementById('btn-clear-chat').onclick = () => {
+                if(confirm('Clear all messages?')) {
+                    state.messages = [];
+                    saveState();
+                    renderMessages();
+                    closeModal();
+                }
+            };
+            document.getElementById('btn-clear-all').onclick = () => {
+                if(confirm('WARNING: This will delete all your uploaded PDFs and chat history. Are you sure?')) {
+                    localStorage.clear();
+                    location.reload();
+                }
+            };
+
+            document.getElementById('btn-export').onclick = () => {
+                if(state.messages.length === 0) return showToast("Nothing to export");
+                let content = `LexAI Export: ${state.notebookTitle}\nDate: ${new Date().toLocaleString()}\n\n`;
+                state.messages.forEach(m => {
+                    content += `[${m.role.toUpperCase()}]\n${m.content}\n\n`;
+                });
+                const blob = new Blob([content], { type: 'text/plain' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `LexAI_${state.notebookTitle.replace(/\s+/g, '_')}.txt`;
+                a.click();
+            };
+
+            // Keyboard shortcut (Ctrl+K to focus input)
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    e.preventDefault();
+                    D.chatInput.focus();
+                }
+            });
+
+            // Mobile toggles
+            document.getElementById('btn-mobile-menu').onclick = () => {
+                document.getElementById('left-panel').classList.add('open');
+            };
+            document.getElementById('btn-close-right').onclick = () => {
+                document.getElementById('right-panel').classList.remove('open');
+            };
+            
+            // Close left panel when clicking outside on mobile
+            document.getElementById('center-panel').addEventListener('click', (e) => {
+                if(window.innerWidth <= 768 && document.getElementById('left-panel').classList.contains('open')) {
+                    document.getElementById('left-panel').classList.remove('open');
+                }
+            });
+        }
+
+        // Boot
+        window.onload = init;
+    </script>
+</body>
+</html>
